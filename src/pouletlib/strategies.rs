@@ -267,6 +267,7 @@ mod tests {
         assert_eq!(new_proof.set_active_goal(1), Err("Out of bounds"));
         assert_eq!(new_proof.intro(), Err("No goal to test strategy"));
         assert_eq!(new_proof.split(), Err("No goal to test strategy"));
+        assert_eq!(new_proof.hyp_split(0), Err("No goal to test strategy"));
         assert_eq!(new_proof.left(), Err("No goal to test strategy"));
         assert_eq!(new_proof.right(), Err("No goal to test strategy"));
         assert_eq!(new_proof.hyp_left(0), Err("No goal to test strategy"));
@@ -366,25 +367,347 @@ mod tests {
     #[test]
     fn intro() {
         let mut proof_before = Proof {
-            goals: vec![(
+            goals: vec![
+                (
+                    Rc::new(Prop::imply(
+                        Prop::from_name(String::from("a")),
+                        Prop::from_name(String::from("b")),
+                    )),
+                    vec![],
+                ),
+                (Rc::new(Prop::True), vec![]),
+                (Rc::new(Prop::False), vec![]),
+                (Rc::new(Prop::from_name(String::from("name"))), vec![]),
+                (
+                    Rc::new(Prop::and(
+                        Prop::from_name(String::from("a")),
+                        Prop::from_name(String::from("b")),
+                    )),
+                    vec![],
+                ),
+                (
+                    Rc::new(Prop::or(
+                        Prop::from_name(String::from("a")),
+                        Prop::from_name(String::from("b")),
+                    )),
+                    vec![],
+                ),
+            ],
+            active_goal: 0,
+        };
+
+        let proof_after = Proof {
+            goals: vec![
+                (
+                    Rc::new(Prop::from_name(String::from("b"))),
+                    vec![Rc::new(Prop::from_name(String::from("a")))],
+                ),
+                (Rc::new(Prop::True), vec![]),
+                (Rc::new(Prop::False), vec![]),
+                (Rc::new(Prop::from_name(String::from("name"))), vec![]),
+                (
+                    Rc::new(Prop::and(
+                        Prop::from_name(String::from("a")),
+                        Prop::from_name(String::from("b")),
+                    )),
+                    vec![],
+                ),
+                (
+                    Rc::new(Prop::or(
+                        Prop::from_name(String::from("a")),
+                        Prop::from_name(String::from("b")),
+                    )),
+                    vec![],
+                ),
+            ],
+            active_goal: 0,
+        };
+
+        assert_eq!(proof_before.intro(), Ok(()));
+        assert_eq!(proof_before, proof_after);
+        let _ = proof_before.set_active_goal(1);
+        assert_eq!(proof_before.intro(), Err("Strategy could not be applied"));
+        let _ = proof_before.set_active_goal(2);
+        assert_eq!(proof_before.intro(), Err("Strategy could not be applied"));
+        let _ = proof_before.set_active_goal(3);
+        assert_eq!(proof_before.intro(), Err("Strategy could not be applied"));
+        let _ = proof_before.set_active_goal(4);
+        assert_eq!(proof_before.intro(), Err("Strategy could not be applied"));
+        let _ = proof_before.set_active_goal(5);
+        assert_eq!(proof_before.intro(), Err("Strategy could not be applied"));
+    }
+
+    #[test]
+    fn split() {
+        let mut proof_before = Proof {
+            goals: vec![
+                (
+                    Rc::new(Prop::and(
+                        Prop::from_name(String::from("a")),
+                        Prop::from_name(String::from("b")),
+                    )),
+                    vec![],
+                ),
+                (Rc::new(Prop::True), vec![]),
+                (Rc::new(Prop::False), vec![]),
+                (Rc::new(Prop::from_name(String::from("name"))), vec![]),
+                (
+                    Rc::new(Prop::imply(
+                        Prop::from_name(String::from("a")),
+                        Prop::from_name(String::from("b")),
+                    )),
+                    vec![],
+                ),
+                (
+                    Rc::new(Prop::or(
+                        Prop::from_name(String::from("a")),
+                        Prop::from_name(String::from("b")),
+                    )),
+                    vec![],
+                ),
+            ],
+            active_goal: 0,
+        };
+
+        let proof_after = Proof {
+            goals: vec![
+                (Rc::new(Prop::from_name(String::from("a"))), vec![]),
+                (Rc::new(Prop::True), vec![]),
+                (Rc::new(Prop::False), vec![]),
+                (Rc::new(Prop::from_name(String::from("name"))), vec![]),
+                (
                 Rc::new(Prop::imply(
                     Prop::from_name(String::from("a")),
                     Prop::from_name(String::from("b")),
                 )),
                 vec![],
+                ),
+                (
+                    Rc::new(Prop::or(
+                        Prop::from_name(String::from("a")),
+                        Prop::from_name(String::from("b")),
+                    )),
+                    vec![],
+                ),
+                (Rc::new(Prop::from_name(String::from("b"))), vec![]),
+            ],
+            active_goal: 0,
+        };
+
+        assert_eq!(proof_before.split(), Ok(()));
+        assert_eq!(proof_before, proof_after);
+        assert_eq!(proof_before.split(), Err("Strategy could not be applied"));
+        let _ = proof_before.set_active_goal(1);
+        assert_eq!(proof_before.split(), Err("Strategy could not be applied"));
+        let _ = proof_before.set_active_goal(2);
+        assert_eq!(proof_before.split(), Err("Strategy could not be applied"));
+        let _ = proof_before.set_active_goal(3);
+        assert_eq!(proof_before.split(), Err("Strategy could not be applied"));
+        let _ = proof_before.set_active_goal(4);
+        assert_eq!(proof_before.split(), Err("Strategy could not be applied"));
+        let _ = proof_before.set_active_goal(5);
+        assert_eq!(proof_before.split(), Err("Strategy could not be applied"));
+        let _ = proof_before.set_active_goal(6);
+        assert_eq!(proof_before.split(), Err("Strategy could not be applied"));
+    }
+
+    #[test]
+    fn hyp_split() {
+        let mut proof_before = Proof {
+            goals: vec![(
+                Rc::new(Prop::False),
+                vec![
+                    Rc::new(Prop::and(
+                        Prop::from_name(String::from("a")),
+                        Prop::from_name(String::from("b")),
+                    )),
+                    Rc::new(Prop::True),
+                    Rc::new(Prop::False),
+                    Rc::new(Prop::from_name(String::from("name"))),
+                    Rc::new(Prop::imply(
+                        Prop::from_name(String::from("a")),
+                        Prop::from_name(String::from("b")),
+                    )),
+                    Rc::new(Prop::or(
+                        Prop::from_name(String::from("a")),
+                        Prop::from_name(String::from("b")),
+                    )),
+                ],
             )],
             active_goal: 0,
         };
 
         let proof_after = Proof {
             goals: vec![(
+                Rc::new(Prop::False),
+                vec![
+                    Rc::new(Prop::from_name(String::from("a"))),
+                    Rc::new(Prop::True),
+                    Rc::new(Prop::False),
+                    Rc::new(Prop::from_name(String::from("name"))),
+                    Rc::new(Prop::imply(
+                        Prop::from_name(String::from("a")),
+                        Prop::from_name(String::from("b")),
+                    )),
+                    Rc::new(Prop::or(
+                        Prop::from_name(String::from("a")),
+                        Prop::from_name(String::from("b")),
+                    )),
                 Rc::new(Prop::from_name(String::from("b"))),
-                vec![Rc::new(Prop::from_name(String::from("a")))],
+                ],
             )],
             active_goal: 0,
         };
 
-        assert_eq!(proof_before.intro(), Ok(()));
+        assert_eq!(proof_before.hyp_split(0), Ok(()));
         assert_eq!(proof_before, proof_after);
+        assert_eq!(
+            proof_before.hyp_split(1),
+            Err("Strategy could not be applied")
+        );
+        assert_eq!(
+            proof_before.hyp_split(2),
+            Err("Strategy could not be applied")
+        );
+        assert_eq!(
+            proof_before.hyp_split(3),
+            Err("Strategy could not be applied")
+        );
+        assert_eq!(
+            proof_before.hyp_split(4),
+            Err("Strategy could not be applied")
+        );
+        assert_eq!(
+            proof_before.hyp_split(5),
+            Err("Strategy could not be applied")
+        );
+        assert_eq!(
+            proof_before.hyp_split(6),
+            Err("Strategy could not be applied")
+        );
+        assert_eq!(proof_before.hyp_split(8), Err("Out of bounds"))
+    }
+
+    #[test]
+    fn or_split() {
+        let mut proof_before_left = Proof {
+            goals: vec![
+                (
+                    Rc::new(Prop::or(
+                        Prop::from_name(String::from("a")),
+                        Prop::from_name(String::from("b")),
+                    )),
+                    vec![],
+                ),
+                (Rc::new(Prop::True), vec![]),
+                (Rc::new(Prop::False), vec![]),
+                (Rc::new(Prop::from_name(String::from("name"))), vec![]),
+                (
+                    Rc::new(Prop::imply(
+                        Prop::from_name(String::from("a")),
+                        Prop::from_name(String::from("b")),
+                    )),
+                    vec![],
+                ),
+                (
+                    Rc::new(Prop::and(
+                        Prop::from_name(String::from("a")),
+                        Prop::from_name(String::from("b")),
+                    )),
+                    vec![],
+                ),
+            ],
+            active_goal: 0,
+        };
+
+        let proof_after_left = Proof {
+            goals: vec![
+                (Rc::new(Prop::from_name(String::from("a"))), vec![]),
+                (Rc::new(Prop::True), vec![]),
+                (Rc::new(Prop::False), vec![]),
+                (Rc::new(Prop::from_name(String::from("name"))), vec![]),
+                (
+                    Rc::new(Prop::imply(
+                        Prop::from_name(String::from("a")),
+                        Prop::from_name(String::from("b")),
+                    )),
+                    vec![],
+                ),
+                (
+                    Rc::new(Prop::and(
+                        Prop::from_name(String::from("a")),
+                        Prop::from_name(String::from("b")),
+                    )),
+                    vec![],
+                ),
+            ],
+            active_goal: 0,
+        };
+
+        let mut proof_before_right = proof_before_left.clone();
+
+        let proof_after_right = Proof {
+            goals: vec![
+                (Rc::new(Prop::from_name(String::from("b"))), vec![]),
+                (Rc::new(Prop::True), vec![]),
+                (Rc::new(Prop::False), vec![]),
+                (Rc::new(Prop::from_name(String::from("name"))), vec![]),
+                (
+                    Rc::new(Prop::imply(
+                        Prop::from_name(String::from("a")),
+                        Prop::from_name(String::from("b")),
+                    )),
+                    vec![],
+                ),
+                (
+                    Rc::new(Prop::and(
+                        Prop::from_name(String::from("a")),
+                        Prop::from_name(String::from("b")),
+                    )),
+                    vec![],
+                ),
+            ],
+            active_goal: 0,
+        };
+
+        assert_eq!(proof_before_left.left(), Ok(()));
+        assert_eq!(proof_before_left, proof_after_left);
+        assert_eq!(proof_before_right.right(), Ok(()));
+        assert_eq!(proof_before_right, proof_after_right);
+
+        assert_eq!(
+            proof_before_left.left(),
+            Err("Strategy could not be applied")
+        );
+        let _ = proof_before_left.set_active_goal(1);
+        assert_eq!(
+            proof_before_left.left(),
+            Err("Strategy could not be applied")
+        );
+        let _ = proof_before_left.set_active_goal(2);
+        assert_eq!(
+            proof_before_left.left(),
+            Err("Strategy could not be applied")
+        );
+        let _ = proof_before_left.set_active_goal(3);
+        assert_eq!(
+            proof_before_left.left(),
+            Err("Strategy could not be applied")
+        );
+        let _ = proof_before_left.set_active_goal(4);
+        assert_eq!(
+            proof_before_left.left(),
+            Err("Strategy could not be applied")
+        );
+        let _ = proof_before_left.set_active_goal(5);
+        assert_eq!(
+            proof_before_left.left(),
+            Err("Strategy could not be applied")
+        );
+        let _ = proof_before_left.set_active_goal(6);
+        assert_eq!(
+            proof_before_left.left(),
+            Err("Strategy could not be applied")
+        );
     }
 }

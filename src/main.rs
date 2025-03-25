@@ -1,5 +1,5 @@
 mod cli;
-mod pouletlib;
+mod libpoulet;
 
 fn main() {
     cli::repl();

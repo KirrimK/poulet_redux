@@ -1,7 +1,7 @@
 use std::{io::Write, process::exit};
 
-use crate::pouletlib::logic;
-use crate::pouletlib::strategies;
+use crate::libpoulet::logic;
+use crate::libpoulet::strategies;
 
 fn parse_input<'a>(proof: &'a mut strategies::Proof, input: &'a str) -> Result<bool, &'a str> {
     let input = input.trim();

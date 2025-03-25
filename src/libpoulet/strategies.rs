@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use crate::pouletlib::logic;
+use crate::libpoulet::logic;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Proof {
@@ -476,11 +476,11 @@ mod tests {
                 (Rc::new(Prop::False), vec![]),
                 (Rc::new(Prop::from_name(String::from("name"))), vec![]),
                 (
-                Rc::new(Prop::imply(
-                    Prop::from_name(String::from("a")),
-                    Prop::from_name(String::from("b")),
-                )),
-                vec![],
+                    Rc::new(Prop::imply(
+                        Prop::from_name(String::from("a")),
+                        Prop::from_name(String::from("b")),
+                    )),
+                    vec![],
                 ),
                 (
                     Rc::new(Prop::or(
@@ -553,7 +553,7 @@ mod tests {
                         Prop::from_name(String::from("a")),
                         Prop::from_name(String::from("b")),
                     )),
-                Rc::new(Prop::from_name(String::from("b"))),
+                    Rc::new(Prop::from_name(String::from("b"))),
                 ],
             )],
             active_goal: 0,

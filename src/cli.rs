@@ -1,57 +1,81 @@
 use std::{io::Write, process::exit};
 
+use crate::libpoulet::backtrack;
 use crate::libpoulet::logic;
 use crate::libpoulet::strategies;
 
-fn parse_input<'a>(proof: &'a mut strategies::Proof, input: &'a str) -> Result<bool, &'a str> {
+fn parse_input<'a>(
+    proof: &'a mut strategies::Proof,
+    prevs: &mut Vec<strategies::Proof>,
+    input: &'a str,
+) -> Result<u8, &'a str> {
     let input = input.trim();
     match input.split_once(char::is_whitespace) {
+        Some(("load", rest)) => {
+            let path = rest.trim();
+            match strategies::Proof::from_file(path) {
+                Ok(loaded_proof) => {
+                    *proof = loaded_proof;
+                    Ok(1)
+                }
+                Err(msg) => Err(msg.leak()),
+            }
+        },
+        Some(("save", rest)) => {
+            let path = rest.trim();
+            match proof.to_file(path) {
+                Ok(_) => {
+                    Ok(1)
+                }
+                Err(msg) => Err(msg.leak()),
+            }
+        }
         Some(("add_goal_rpn", rest)) => match logic::Prop::parse_rpn(rest) {
             Ok(prop) => {
                 proof.add_goal_from_prop(prop);
-                Ok(false)
+                Ok(1)
             }
             Err(msg) => Err(msg),
         },
         Some(("set_active", rest)) => match rest.trim().parse::<usize>() {
             Ok(0) => Err("Invalid argument"),
             Ok(goal_num) => match proof.set_active_goal(goal_num - 1) {
-                Ok(()) => Ok(false),
+                Ok(()) => Ok(1),
                 Err(msg) => Err(msg),
             },
             Err(_) => Err("Invalid argument"),
         },
         Some(("hyp_split", rest)) => match rest.trim().parse::<usize>() {
             Ok(goal_num) => match proof.hyp_split(goal_num) {
-                Ok(()) => Ok(false),
+                Ok(()) => Ok(1),
                 Err(msg) => Err(msg),
             },
             Err(_) => Err("Invalid argument"),
         },
         Some(("hyp_left", rest)) => match rest.trim().parse::<usize>() {
             Ok(goal_num) => match proof.hyp_left(goal_num) {
-                Ok(()) => Ok(false),
+                Ok(()) => Ok(1),
                 Err(msg) => Err(msg),
             },
             Err(_) => Err("Invalid argument"),
         },
         Some(("hyp_right", rest)) => match rest.trim().parse::<usize>() {
             Ok(goal_num) => match proof.hyp_right(goal_num) {
-                Ok(()) => Ok(false),
+                Ok(()) => Ok(1),
                 Err(msg) => Err(msg),
             },
             Err(_) => Err("Invalid argument"),
         },
         Some(("exact", rest)) => match rest.trim().parse::<usize>() {
             Ok(goal_num) => match proof.goal_is_exact_hyp(goal_num) {
-                Ok(()) => Ok(false),
+                Ok(()) => Ok(1),
                 Err(msg) => Err(msg),
             },
             Err(_) => Err("Invalid argument"),
         },
         Some(("apply", rest)) => match rest.trim().parse::<usize>() {
             Ok(goal_num) => match proof.apply(goal_num) {
-                Ok(()) => Ok(false),
+                Ok(()) => Ok(1),
                 Err(msg) => Err(msg),
             },
             Err(_) => Err("Invalid argument"),
@@ -64,7 +88,7 @@ fn parse_input<'a>(proof: &'a mut strategies::Proof, input: &'a str) -> Result<b
                 ) {
                     (Ok(first_num), Ok(second_num)) => {
                         match proof.apply_in_hyp(first_num, second_num, false) {
-                            Ok(()) => Ok(false),
+                            Ok(()) => Ok(1),
                             Err(msg) => Err(msg),
                         }
                     }
@@ -85,7 +109,7 @@ fn parse_input<'a>(proof: &'a mut strategies::Proof, input: &'a str) -> Result<b
                 ) {
                     (Ok(first_num), Ok(second_num)) => {
                         match proof.apply_in_hyp(first_num, second_num, true) {
-                            Ok(()) => Ok(false),
+                            Ok(()) => Ok(1),
                             Err(msg) => Err(msg),
                         }
                     }
@@ -100,37 +124,56 @@ fn parse_input<'a>(proof: &'a mut strategies::Proof, input: &'a str) -> Result<b
         },
         Some((_, _)) => Err("Unknown command"),
         None => match input {
-            "quit" => Ok(true),
+            "quit" => Ok(0),
             "purge" => {
                 *proof = strategies::Proof::new();
-                Ok(false)
+                *prevs = vec![];
+                Ok(1)
             }
+            "back" => match prevs.pop() {
+                Some(a) => {
+                    *proof = a;
+                    Ok(2)
+                }
+                None => Err("Cannot go back further"),
+            },
+            "auto" => match backtrack::auto(proof) {
+                Ok(steps) => {
+                    println!("Solved using auto:");
+                    for elt in steps {
+                        println!("    {}", strategies::strat_to_string(elt));
+                    }
+                    *proof = strategies::Proof::new();
+                    Ok(1)
+                }
+                Err(()) => Err("Could not solve using auto"),
+            },
             "intro" => match proof.intro() {
-                Ok(()) => Ok(false),
+                Ok(()) => Ok(1),
                 Err(msg) => Err(msg),
             },
             "clean" => {
                 proof.clean();
-                Ok(false)
+                Ok(1)
             }
             "split" => match proof.split() {
-                Ok(()) => Ok(false),
+                Ok(()) => Ok(1),
                 Err(msg) => Err(msg),
             },
             "left" => match proof.left() {
-                Ok(()) => Ok(false),
+                Ok(()) => Ok(1),
                 Err(msg) => Err(msg),
             },
             "right" => match proof.right() {
-                Ok(()) => Ok(false),
+                Ok(()) => Ok(1),
                 Err(msg) => Err(msg),
             },
             "false" => match proof.false_is_hyp() {
-                Ok(()) => Ok(false),
+                Ok(()) => Ok(1),
                 Err(msg) => Err(msg),
             },
             "assumption" => match proof.assumption() {
-                Ok(()) => Ok(false),
+                Ok(()) => Ok(1),
                 Err(msg) => Err(msg),
             },
             "add_goal_rpn" => Err("missing argument: <proposition rpn format>"),
@@ -146,6 +189,7 @@ fn parse_input<'a>(proof: &'a mut strategies::Proof, input: &'a str) -> Result<b
 
 pub fn repl() {
     let mut proof = strategies::Proof::new();
+    let mut prevs: Vec<strategies::Proof> = vec![];
     loop {
         if proof.goals.is_empty() {
             println!("Goals: None")
@@ -164,6 +208,10 @@ pub fn repl() {
                 proof.number_of_goals(),
                 proof.active_goal_index() + 1
             );
+            println!("Applicable Strategies: ");
+            for elt in proof.get_applicable_strategies() {
+                println!("    {}", strategies::strat_to_string(elt));
+            }
         }
 
         print!("> ");
@@ -172,10 +220,13 @@ pub fn repl() {
         std::io::stdin()
             .read_line(&mut buffer)
             .expect("Unable to read from stdin");
-        match parse_input(&mut proof, &buffer) {
-            Ok(quit) => {
-                if quit {
+        let proof_before = proof.clone();
+        match parse_input(&mut proof, &mut prevs, &buffer) {
+            Ok(flag) => {
+                if flag == 0 {
                     exit(0);
+                } else if flag == 1 {
+                    prevs.push(proof_before);
                 }
             }
             Err(msg) => {

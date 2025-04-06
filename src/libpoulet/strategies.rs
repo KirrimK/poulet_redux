@@ -1,4 +1,8 @@
-use std::rc::Rc;
+use std::{
+    fs::File,
+    io::{BufRead, BufReader, BufWriter, Write},
+    rc::Rc,
+};
 
 use crate::libpoulet::logic;
 
@@ -8,11 +12,82 @@ pub struct Proof {
     active_goal: usize,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Strategies {
+    Intro,
+    Split,
+    HypSplit,
+    Left,
+    Right,
+    HypLeft,
+    HypRight,
+    FalseIsHyp,
+    Exact,
+    Apply,
+    ApplyIn,
+}
+
 impl Proof {
     pub fn new() -> Proof {
         Proof {
             goals: vec![],
             active_goal: 0,
+        }
+    }
+
+    pub fn from_file(path: &str) -> Result<Proof, String> {
+        if let Ok(file) = File::open(path) {
+            let mut proof = Proof::new();
+            let reader = BufReader::new(file);
+            for l in reader.lines().map_while(Result::ok) {
+                if let Some((verb, param)) = l.split_once(':') {
+                    if verb == "G" {
+                        match logic::Prop::parse_rpn(param) {
+                            Ok(prop) => {
+                                proof.add_goal_from_prop(prop);
+                                let _ = proof.set_active_goal(proof.number_of_goals() - 1);
+                            }
+                            Err(msg) => return Err(format!("Error while parsing file: {}", msg)),
+                        }
+                    } else if verb == "H" {
+                        match logic::Prop::parse_rpn(param) {
+                            Ok(prop) => {
+                                proof.add_hyp_from_prop(prop);
+                            }
+                            Err(msg) => return Err(format!("Error while parsing file: {}", msg)),
+                        }
+                    }
+                }
+            }
+
+            Ok(proof)
+        } else {
+            Err(format!("failed to open file '{}'", path))
+        }
+    }
+
+    pub fn to_file(&self, path: &str) -> Result<(), String> {
+        if let Ok(file) = File::create(path) {
+            let mut file = BufWriter::new(file);
+            for goal in self.goals.iter() {
+                match file.write_fmt(format_args!("G:{}", goal.0.to_string_rpn())) {
+                    Ok(_) => (),
+                    Err(_) => return Err(format!("failed to write to file '{}'", path)),
+                }
+                for hyp in goal.1.iter() {
+                    match file.write_fmt(format_args!("H:{}", hyp.to_string_rpn())) {
+                        Ok(_) => (),
+                        Err(_) => return Err(format!("failed to write to file '{}'", path)),
+                    }
+                }
+            }
+
+            match file.flush() {
+                Ok(_) => Ok(()),
+                Err(_) => Err(format!("failed to write to file '{}'", path)),
+            }
+        } else {
+            Err(format!("failed to open file '{}'", path))
         }
     }
 
@@ -35,6 +110,10 @@ impl Proof {
 
     pub fn add_goal_from_prop(&mut self, goal: logic::Prop) {
         self.goals.push((Rc::new(goal), vec![]))
+    }
+
+    pub fn add_hyp_from_prop(&mut self, hyp: logic::Prop) {
+        self.goals[self.active_goal].1.push(Rc::new(hyp))
     }
 
     pub fn clean(&mut self) {
@@ -230,11 +309,11 @@ impl Proof {
         match self.goals[self.active_goal].1[i_applied].as_ref().clone() {
             logic::Prop::Implies(a, b) => {
                 let target_prop = &self.goals[self.active_goal].1[i_target];
-                if b.as_ref() == target_prop.as_ref() {
+                if a.as_ref() == target_prop.as_ref() {
                     if keep_old {
-                        self.goals[self.active_goal].1.push(a.clone());
+                        self.goals[self.active_goal].1.push(b.clone());
                     } else {
-                        self.goals[self.active_goal].1[i_target] = a.clone();
+                        self.goals[self.active_goal].1[i_target] = b.clone();
                     }
                     Ok(())
                 } else {
@@ -243,6 +322,99 @@ impl Proof {
             }
             _ => Err("Strategy could not be applied"),
         }
+    }
+
+    pub fn get_applicable_strategies(&self) -> Vec<(usize, usize, Strategies, usize, usize)> {
+        let mut result: Vec<(usize, usize, Strategies, usize, usize)> = vec![];
+        // elts in list with syntax (prio: usize, goalnum: usize, cmd: string, arg1: usize, arg2: usize])
+        for (index_goal, goal) in self.goals.iter().enumerate() {
+            match goal.0.as_ref() {
+                logic::Prop::True => continue,
+                logic::Prop::False => (),
+                logic::Prop::Name(_) => (),
+                logic::Prop::Implies(_, _) => result.push((3, index_goal, Strategies::Intro, 0, 0)),
+                logic::Prop::And(_, _) => result.push((3, index_goal, Strategies::Split, 0, 0)),
+                logic::Prop::Or(a, _) => {
+                    if *a.as_ref() != logic::Prop::False {
+                        result.push((3, index_goal, Strategies::Left, 0, 0));
+                        result.push((3, index_goal, Strategies::Right, 0, 0));
+                    } else {
+                        result.push((3, index_goal, Strategies::Right, 0, 0));
+                        result.push((3, index_goal, Strategies::Left, 0, 0));
+                    }
+                }
+            };
+            let num_hyps = goal.1.len();
+            for (index, hyp) in goal.1.iter().enumerate() {
+                match hyp.as_ref() {
+                    logic::Prop::True => {}
+                    logic::Prop::False => {
+                        result.push((0, index_goal, Strategies::FalseIsHyp, 0, 0))
+                    }
+                    logic::Prop::Name(_) => {}
+                    logic::Prop::Implies(a, b) => {
+                        if b.as_ref() == goal.0.as_ref() {
+                            if goal.1.contains(a) {
+                                result.push((2, index_goal, Strategies::Apply, index, 0));
+                            } else {
+                                result.push((4, index_goal, Strategies::Apply, index, 0));
+                            }
+                        }
+                    }
+                    logic::Prop::And(_, _) => {
+                        result.push((4, index_goal, Strategies::HypSplit, index, 0));
+                    }
+                    logic::Prop::Or(a, b) => {
+                        if *a.as_ref() == logic::Prop::False {
+                            result.push((2, index_goal, Strategies::HypLeft, index, 0));
+                            result.push((4, index_goal, Strategies::HypRight, index, 0));
+                        } else if *b.as_ref() == logic::Prop::False {
+                            result.push((4, index_goal, Strategies::HypLeft, index, 0));
+                            result.push((2, index_goal, Strategies::HypRight, index, 0));
+                        } else {
+                            result.push((4, index_goal, Strategies::HypLeft, index, 0));
+                            result.push((4, index_goal, Strategies::HypRight, index, 0));
+                        }
+                    }
+                };
+                if hyp.as_ref() == goal.0.as_ref() {
+                    result.push((1, index_goal, Strategies::Exact, index, 0));
+                }
+                for i in 0..num_hyps {
+                    if i != index {
+                        if let logic::Prop::Implies(a, _) = goal.1[i].as_ref() {
+                            if a.as_ref() == hyp.as_ref() {
+                                result.push((4, index_goal, Strategies::ApplyIn, index, i))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        result.sort();
+        result
+    }
+}
+
+pub fn strat_to_string(strat: (usize, usize, Strategies, usize, usize)) -> String {
+    let (prio, goalnum, strat_name, arg1, arg2) = strat;
+    match strat_name {
+        Strategies::Intro => format!("prio: {} - goal: {} - intro", prio, goalnum),
+        Strategies::Split => format!("prio: {} - goal: {} - split", prio, goalnum),
+        Strategies::HypSplit => format!("prio: {} - goal: {} - hyp_split {}", prio, goalnum, arg1),
+        Strategies::Left => format!("prio: {} - goal: {} - left", prio, goalnum),
+        Strategies::Right => format!("prio: {} - goal: {} - right", prio, goalnum),
+        Strategies::HypLeft => format!("prio: {} - goal: {} - hyp_left {}", prio, goalnum, arg1),
+        Strategies::HypRight => format!("prio: {} - goal: {} - hyp_right {}", prio, goalnum, arg1),
+        Strategies::FalseIsHyp => {
+            format!("prio: {} - goal: {} - false_is_hyp", prio, goalnum)
+        }
+        Strategies::Exact => format!("prio: {} - goal: {} - exact {}", prio, goalnum, arg1),
+        Strategies::Apply => format!("prio: {} - goal: {} - apply {}", prio, goalnum, arg1),
+        Strategies::ApplyIn => format!(
+            "prio: {} - goal: {} - apply_in_hyp {} {}",
+            prio, goalnum, arg1, arg2
+        ),
     }
 }
 

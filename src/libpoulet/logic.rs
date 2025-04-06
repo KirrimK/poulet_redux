@@ -33,6 +33,10 @@ impl Prop {
         Prop::Or(Rc::new(a), Rc::new(b))
     }
 
+    pub fn equiv(a: Prop, b: Prop) -> Prop {
+        Prop::and(Prop::imply(a.clone(), b.clone()), Prop::imply(b, a))
+    }
+
     pub fn parse_rpn(s: &str) -> Result<Prop, &str> {
         let mut acc: Vec<Prop> = vec![];
         for string in s.split_whitespace() {
@@ -84,6 +88,23 @@ impl Prop {
                         _ => {
                             return Err(
                                 "During parsing of '|', two items expected in accumulator, found zero",
+                            );
+                        }
+                    }
+                }
+                "<=>" => {
+                    let b = acc.pop();
+                    let a = acc.pop();
+                    match (a, b) {
+                        (Some(thing_a), Some(thing_b)) => acc.push(Prop::equiv(thing_a, thing_b)),
+                        (None, Some(_)) => {
+                            return Err(
+                                "During parsing of '<=>', two items expected in accumulator, found one",
+                            );
+                        }
+                        _ => {
+                            return Err(
+                                "During parsing of '<=>', two items expected in accumulator, found zero",
                             );
                         }
                     }

@@ -20,13 +20,11 @@ fn parse_input<'a>(
                 }
                 Err(msg) => Err(msg.leak()),
             }
-        },
+        }
         Some(("save", rest)) => {
             let path = rest.trim();
             match proof.to_file(path) {
-                Ok(_) => {
-                    Ok(1)
-                }
+                Ok(_) => Ok(1),
                 Err(msg) => Err(msg.leak()),
             }
         }

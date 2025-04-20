@@ -12,19 +12,19 @@ pub struct Proof {
     active_goal: usize,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Strategies {
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum StrategyArg {
     Intro,
     Split,
-    HypSplit,
+    HypSplit(usize),
     Left,
     Right,
-    HypLeft,
-    HypRight,
+    HypLeft(usize),
+    HypRight(usize),
     FalseIsHyp,
-    Exact,
-    Apply,
-    ApplyIn,
+    Exact(usize),
+    Apply(usize),
+    ApplyIn(usize, usize),
 }
 
 impl Proof {
@@ -324,23 +324,26 @@ impl Proof {
         }
     }
 
-    pub fn get_applicable_strategies(&self) -> Vec<(usize, usize, Strategies, usize, usize)> {
-        let mut result: Vec<(usize, usize, Strategies, usize, usize)> = vec![];
+    pub fn get_applicable_strategies(&self) -> Vec<(usize, usize, StrategyArg)> {
+        let mut result: Vec<(usize, usize, StrategyArg)> = vec![];
         // elts in list with syntax (prio: usize, goalnum: usize, cmd: string, arg1: usize, arg2: usize])
         for (index_goal, goal) in self.goals.iter().enumerate() {
             match goal.0.as_ref() {
                 logic::Prop::True => continue,
                 logic::Prop::False => (),
                 logic::Prop::Name(_) => (),
-                logic::Prop::Implies(_, _) => result.push((3, index_goal, Strategies::Intro, 0, 0)),
-                logic::Prop::And(_, _) => result.push((3, index_goal, Strategies::Split, 0, 0)),
-                logic::Prop::Or(a, _) => {
-                    if *a.as_ref() != logic::Prop::False {
-                        result.push((3, index_goal, Strategies::Left, 0, 0));
-                        result.push((3, index_goal, Strategies::Right, 0, 0));
+                logic::Prop::Implies(_, _) => result.push((3, index_goal, StrategyArg::Intro)),
+                logic::Prop::And(_, _) => result.push((3, index_goal, StrategyArg::Split)),
+                logic::Prop::Or(a, b) => {
+                    if *a.as_ref() == logic::Prop::False {
+                        result.push((3, index_goal, StrategyArg::Right));
+                        result.push((4, index_goal, StrategyArg::Left));
+                    } else if *b.as_ref() == logic::Prop::False {
+                        result.push((3, index_goal, StrategyArg::Left));
+                        result.push((4, index_goal, StrategyArg::Right));
                     } else {
-                        result.push((3, index_goal, Strategies::Right, 0, 0));
-                        result.push((3, index_goal, Strategies::Left, 0, 0));
+                        result.push((3, index_goal, StrategyArg::Left));
+                        result.push((3, index_goal, StrategyArg::Right));
                     }
                 }
             };
@@ -348,43 +351,41 @@ impl Proof {
             for (index, hyp) in goal.1.iter().enumerate() {
                 match hyp.as_ref() {
                     logic::Prop::True => {}
-                    logic::Prop::False => {
-                        result.push((0, index_goal, Strategies::FalseIsHyp, 0, 0))
-                    }
+                    logic::Prop::False => result.push((0, index_goal, StrategyArg::FalseIsHyp)),
                     logic::Prop::Name(_) => {}
                     logic::Prop::Implies(a, b) => {
                         if b.as_ref() == goal.0.as_ref() {
                             if goal.1.contains(a) {
-                                result.push((2, index_goal, Strategies::Apply, index, 0));
+                                result.push((2, index_goal, StrategyArg::Apply(index)));
                             } else {
-                                result.push((4, index_goal, Strategies::Apply, index, 0));
+                                result.push((4, index_goal, StrategyArg::Apply(index)));
                             }
                         }
                     }
                     logic::Prop::And(_, _) => {
-                        result.push((4, index_goal, Strategies::HypSplit, index, 0));
+                        result.push((4, index_goal, StrategyArg::HypSplit(index)));
                     }
                     logic::Prop::Or(a, b) => {
                         if *a.as_ref() == logic::Prop::False {
-                            result.push((2, index_goal, Strategies::HypLeft, index, 0));
-                            result.push((4, index_goal, Strategies::HypRight, index, 0));
+                            result.push((2, index_goal, StrategyArg::HypLeft(index)));
+                            result.push((4, index_goal, StrategyArg::HypRight(index)));
                         } else if *b.as_ref() == logic::Prop::False {
-                            result.push((4, index_goal, Strategies::HypLeft, index, 0));
-                            result.push((2, index_goal, Strategies::HypRight, index, 0));
+                            result.push((4, index_goal, StrategyArg::HypLeft(index)));
+                            result.push((2, index_goal, StrategyArg::HypRight(index)));
                         } else {
-                            result.push((4, index_goal, Strategies::HypLeft, index, 0));
-                            result.push((4, index_goal, Strategies::HypRight, index, 0));
+                            result.push((4, index_goal, StrategyArg::HypLeft(index)));
+                            result.push((4, index_goal, StrategyArg::HypRight(index)));
                         }
                     }
                 };
                 if hyp.as_ref() == goal.0.as_ref() {
-                    result.push((1, index_goal, Strategies::Exact, index, 0));
+                    result.push((1, index_goal, StrategyArg::Exact(index)));
                 }
                 for i in 0..num_hyps {
                     if i != index {
                         if let logic::Prop::Implies(a, _) = goal.1[i].as_ref() {
                             if a.as_ref() == hyp.as_ref() {
-                                result.push((4, index_goal, Strategies::ApplyIn, index, i))
+                                result.push((4, index_goal, StrategyArg::ApplyIn(index, i)))
                             }
                         }
                     }
@@ -396,22 +397,28 @@ impl Proof {
     }
 }
 
-pub fn strat_to_string(strat: (usize, usize, Strategies, usize, usize)) -> String {
-    let (prio, goalnum, strat_name, arg1, arg2) = strat;
+pub fn strat_to_string(strat: (usize, usize, StrategyArg)) -> String {
+    let (prio, goalnum, strat_name) = strat;
     match strat_name {
-        Strategies::Intro => format!("prio: {} - goal: {} - intro", prio, goalnum),
-        Strategies::Split => format!("prio: {} - goal: {} - split", prio, goalnum),
-        Strategies::HypSplit => format!("prio: {} - goal: {} - hyp_split {}", prio, goalnum, arg1),
-        Strategies::Left => format!("prio: {} - goal: {} - left", prio, goalnum),
-        Strategies::Right => format!("prio: {} - goal: {} - right", prio, goalnum),
-        Strategies::HypLeft => format!("prio: {} - goal: {} - hyp_left {}", prio, goalnum, arg1),
-        Strategies::HypRight => format!("prio: {} - goal: {} - hyp_right {}", prio, goalnum, arg1),
-        Strategies::FalseIsHyp => {
+        StrategyArg::Intro => format!("prio: {} - goal: {} - intro", prio, goalnum),
+        StrategyArg::Split => format!("prio: {} - goal: {} - split", prio, goalnum),
+        StrategyArg::HypSplit(arg1) => {
+            format!("prio: {} - goal: {} - hyp_split {}", prio, goalnum, arg1)
+        }
+        StrategyArg::Left => format!("prio: {} - goal: {} - left", prio, goalnum),
+        StrategyArg::Right => format!("prio: {} - goal: {} - right", prio, goalnum),
+        StrategyArg::HypLeft(arg1) => {
+            format!("prio: {} - goal: {} - hyp_left {}", prio, goalnum, arg1)
+        }
+        StrategyArg::HypRight(arg1) => {
+            format!("prio: {} - goal: {} - hyp_right {}", prio, goalnum, arg1)
+        }
+        StrategyArg::FalseIsHyp => {
             format!("prio: {} - goal: {} - false_is_hyp", prio, goalnum)
         }
-        Strategies::Exact => format!("prio: {} - goal: {} - exact {}", prio, goalnum, arg1),
-        Strategies::Apply => format!("prio: {} - goal: {} - apply {}", prio, goalnum, arg1),
-        Strategies::ApplyIn => format!(
+        StrategyArg::Exact(arg1) => format!("prio: {} - goal: {} - exact {}", prio, goalnum, arg1),
+        StrategyArg::Apply(arg1) => format!("prio: {} - goal: {} - apply {}", prio, goalnum, arg1),
+        StrategyArg::ApplyIn(arg1, arg2) => format!(
             "prio: {} - goal: {} - apply_in_hyp {} {}",
             prio, goalnum, arg1, arg2
         ),
@@ -880,6 +887,99 @@ mod tests {
         assert_eq!(
             proof_before_left.left(),
             Err("Strategy could not be applied")
+        );
+    }
+
+    #[test]
+    fn applicable_strategies() {
+        let empty_proof = Proof::new();
+        assert_eq!(empty_proof.get_applicable_strategies(), vec![]);
+
+        let only_name = Proof {
+            goals: vec![(Rc::new(Prop::Name(String::from("a"))), vec![])],
+            active_goal: 0,
+        };
+        assert_eq!(only_name.get_applicable_strategies(), vec![]);
+
+        let only_true = Proof {
+            goals: vec![(Rc::new(Prop::True), vec![])],
+            active_goal: 0,
+        };
+        assert_eq!(only_true.get_applicable_strategies(), vec![]);
+
+        let only_false = Proof {
+            goals: vec![(Rc::new(Prop::False), vec![])],
+            active_goal: 0,
+        };
+        assert_eq!(only_false.get_applicable_strategies(), vec![]);
+
+        let one_intro = Proof {
+            goals: vec![(
+                Rc::new(Prop::imply(
+                    Prop::Name(String::from("a")),
+                    Prop::Name(String::from("b")),
+                )),
+                vec![],
+            )],
+            active_goal: 0,
+        };
+        assert_eq!(
+            one_intro.get_applicable_strategies(),
+            vec![(3, 0, StrategyArg::Intro)]
+        );
+
+        let one_split = Proof {
+            goals: vec![(
+                Rc::new(Prop::and(
+                    Prop::Name(String::from("a")),
+                    Prop::Name(String::from("b")),
+                )),
+                vec![],
+            )],
+            active_goal: 0,
+        };
+        assert_eq!(
+            one_split.get_applicable_strategies(),
+            vec![(3, 0, StrategyArg::Split)]
+        );
+
+        let left_right_no_false = Proof {
+            goals: vec![(
+                Rc::new(Prop::or(
+                    Prop::Name(String::from("a")),
+                    Prop::Name(String::from("b")),
+                )),
+                vec![],
+            )],
+            active_goal: 0,
+        };
+        assert_eq!(
+            left_right_no_false.get_applicable_strategies(),
+            vec![(3, 0, StrategyArg::Left), (3, 0, StrategyArg::Right)]
+        );
+
+        let left_right_false = Proof {
+            goals: vec![(
+                Rc::new(Prop::or(Prop::Name(String::from("a")), Prop::False)),
+                vec![],
+            )],
+            active_goal: 0,
+        };
+        assert_eq!(
+            left_right_false.get_applicable_strategies(),
+            vec![(3, 0, StrategyArg::Left), (4, 0, StrategyArg::Right)]
+        );
+
+        let left_false_right = Proof {
+            goals: vec![(
+                Rc::new(Prop::or(Prop::False, Prop::Name(String::from("b")))),
+                vec![],
+            )],
+            active_goal: 0,
+        };
+        assert_eq!(
+            left_false_right.get_applicable_strategies(),
+            vec![(3, 0, StrategyArg::Right), (4, 0, StrategyArg::Left)]
         );
     }
 }

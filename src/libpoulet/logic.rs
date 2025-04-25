@@ -1,4 +1,4 @@
-// use std::cmp::max;
+use std::cmp::max;
 
 use std::rc::Rc;
 
@@ -180,23 +180,23 @@ impl Prop {
         }
     }
 
-    // pub fn depth(self: &Prop) -> usize {
-    //     match self {
-    //         Prop::True | Prop::False | Prop::Name(_) => 1,
-    //         Prop::Implies(a, b) | Prop::And(a, b) | Prop::Or(a, b) => {
-    //             max(a.as_ref().depth(), b.as_ref().depth()) + 1
-    //         }
-    //     }
-    // }
+    pub fn depth(self: &Prop) -> usize {
+        match self {
+            Prop::True | Prop::False | Prop::Name(_) => 1,
+            Prop::Implies(a, b) | Prop::And(a, b) | Prop::Or(a, b) => {
+                max(a.as_ref().depth(), b.as_ref().depth()) + 1
+            }
+        }
+    }
 
-    // pub fn items(self: &Prop) -> usize {
-    //     match self {
-    //         Prop::True | Prop::False | Prop::Name(_) => 1,
-    //         Prop::Implies(a, b) | Prop::And(a, b) | Prop::Or(a, b) => {
-    //             a.as_ref().items() + b.as_ref().items() + 1
-    //         }
-    //     }
-    // }
+    pub fn items(self: &Prop) -> usize {
+        match self {
+            Prop::True | Prop::False | Prop::Name(_) => 1,
+            Prop::Implies(a, b) | Prop::And(a, b) | Prop::Or(a, b) => {
+                a.as_ref().items() + b.as_ref().items() + 1
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -274,55 +274,55 @@ mod tests {
         );
     }
 
-    // #[test]
-    // fn depth() {
-    //     let p_true = Prop::True;
-    //     let p_false = Prop::False;
-    //     let p_name = Prop::from_name(String::from("name"));
+    #[test]
+    fn depth() {
+        let p_true = Prop::True;
+        let p_false = Prop::False;
+        let p_name = Prop::from_name(String::from("name"));
 
-    //     assert_eq!(p_true.depth(), 1);
-    //     assert_eq!(p_false.depth(), 1);
-    //     assert_eq!(p_name.depth(), 1);
+        assert_eq!(p_true.depth(), 1);
+        assert_eq!(p_false.depth(), 1);
+        assert_eq!(p_name.depth(), 1);
 
-    //     let p_imply_a = Prop::imply(Prop::True, Prop::False);
-    //     let p_and_a = Prop::and(Prop::True, Prop::False);
-    //     let p_or_a = Prop::or(Prop::True, Prop::False);
+        let p_imply_a = Prop::imply(Prop::True, Prop::False);
+        let p_and_a = Prop::and(Prop::True, Prop::False);
+        let p_or_a = Prop::or(Prop::True, Prop::False);
 
-    //     assert_eq!(p_imply_a.depth(), 2);
-    //     assert_eq!(p_and_a.depth(), 2);
-    //     assert_eq!(p_or_a.depth(), 2);
+        assert_eq!(p_imply_a.depth(), 2);
+        assert_eq!(p_and_a.depth(), 2);
+        assert_eq!(p_or_a.depth(), 2);
 
-    //     let p_complex = Prop::imply(
-    //         Prop::imply(Prop::not(Prop::False), Prop::and(Prop::True, Prop::False)),
-    //         Prop::or(Prop::from_name(String::from("name")), Prop::False),
-    //     );
-    //     assert_eq!(p_complex.depth(), 4);
-    // }
+        let p_complex = Prop::imply(
+            Prop::imply(Prop::not(Prop::False), Prop::and(Prop::True, Prop::False)),
+            Prop::or(Prop::from_name(String::from("name")), Prop::False),
+        );
+        assert_eq!(p_complex.depth(), 4);
+    }
 
-    // #[test]
-    // fn items() {
-    //     let p_true = Prop::True;
-    //     let p_false = Prop::False;
-    //     let p_name = Prop::from_name(String::from("name"));
+    #[test]
+    fn items() {
+        let p_true = Prop::True;
+        let p_false = Prop::False;
+        let p_name = Prop::from_name(String::from("name"));
 
-    //     assert_eq!(p_true.items(), 1);
-    //     assert_eq!(p_false.items(), 1);
-    //     assert_eq!(p_name.items(), 1);
+        assert_eq!(p_true.items(), 1);
+        assert_eq!(p_false.items(), 1);
+        assert_eq!(p_name.items(), 1);
 
-    //     let p_imply_a = Prop::imply(Prop::True, Prop::False);
-    //     let p_and_a = Prop::and(Prop::True, Prop::False);
-    //     let p_or_a = Prop::or(Prop::True, Prop::False);
+        let p_imply_a = Prop::imply(Prop::True, Prop::False);
+        let p_and_a = Prop::and(Prop::True, Prop::False);
+        let p_or_a = Prop::or(Prop::True, Prop::False);
 
-    //     assert_eq!(p_imply_a.items(), 3);
-    //     assert_eq!(p_and_a.items(), 3);
-    //     assert_eq!(p_or_a.items(), 3);
+        assert_eq!(p_imply_a.items(), 3);
+        assert_eq!(p_and_a.items(), 3);
+        assert_eq!(p_or_a.items(), 3);
 
-    //     let p_complex = Prop::imply(
-    //         Prop::imply(Prop::not(Prop::False), Prop::and(Prop::True, Prop::False)),
-    //         Prop::or(Prop::from_name(String::from("name")), Prop::False),
-    //     );
-    //     assert_eq!(p_complex.items(), 11);
-    // }
+        let p_complex = Prop::imply(
+            Prop::imply(Prop::not(Prop::False), Prop::and(Prop::True, Prop::False)),
+            Prop::or(Prop::from_name(String::from("name")), Prop::False),
+        );
+        assert_eq!(p_complex.items(), 11);
+    }
 
     #[test]
     fn parse_rpn() {
@@ -341,6 +341,7 @@ mod tests {
         let rpn_simple_and = "a b ^";
         let rpn_simple_or = "a b |";
         let rpn_simple_not = "a !";
+        let rpn_simple_equiv = "a b <=>";
 
         assert_eq!(
             Prop::parse_rpn(rpn_simple_imply),
@@ -366,6 +367,19 @@ mod tests {
         assert_eq!(
             Prop::parse_rpn(rpn_simple_not),
             Ok(Prop::imply(Prop::from_name(String::from("a")), Prop::False))
+        );
+        assert_eq!(
+            Prop::parse_rpn(rpn_simple_equiv),
+            Ok(Prop::and(
+                Prop::imply(
+                    Prop::from_name(String::from("a")),
+                    Prop::from_name(String::from("b"))
+                ),
+                Prop::imply(
+                    Prop::from_name(String::from("b")),
+                    Prop::from_name(String::from("a"))
+                )
+            ))
         );
 
         let rpn_complex = "a b => c ^ d d => |";
@@ -428,6 +442,15 @@ mod tests {
         assert_eq!(
             Prop::parse_rpn("!"),
             Err("During parsing of '!', one item expected in accumulator, found zero")
+        );
+
+        assert_eq!(
+            Prop::parse_rpn("a <=>"),
+            Err("During parsing of '<=>', two items expected in accumulator, found one")
+        );
+        assert_eq!(
+            Prop::parse_rpn("<=>"),
+            Err("During parsing of '<=>', two items expected in accumulator, found zero")
         );
     }
 

@@ -1,4 +1,5 @@
 use std::{
+    fmt,
     fs::File,
     io::{BufRead, BufReader, BufWriter, Write},
     rc::Rc,
@@ -397,31 +398,47 @@ impl Proof {
     }
 }
 
-pub fn strat_to_string(strat: (usize, usize, StrategyArg)) -> String {
-    let (prio, goalnum, strat_name) = strat;
-    match strat_name {
-        StrategyArg::Intro => format!("prio: {} - goal: {} - intro", prio, goalnum),
-        StrategyArg::Split => format!("prio: {} - goal: {} - split", prio, goalnum),
-        StrategyArg::HypSplit(arg1) => {
-            format!("prio: {} - goal: {} - hyp_split {}", prio, goalnum, arg1)
+impl fmt::Display for StrategyArg {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            StrategyArg::Intro => write!(f, "intro"),
+            StrategyArg::Split => write!(f, "split"),
+            StrategyArg::HypSplit(arg1) => {
+                write!(f, "hyp_split {}", arg1)
+            }
+            StrategyArg::Left => write!(f, "left"),
+            StrategyArg::Right => write!(f, "right"),
+            StrategyArg::HypLeft(arg1) => {
+                write!(f, "hyp_left {}", arg1)
+            }
+            StrategyArg::HypRight(arg1) => {
+                write!(f, "hyp_right {}", arg1)
+            }
+            StrategyArg::FalseIsHyp => {
+                write!(f, "false_is_hyp")
+            }
+            StrategyArg::Exact(arg1) => write!(f, "exact {}", arg1),
+            StrategyArg::Apply(arg1) => write!(f, "apply {}", arg1),
+            StrategyArg::ApplyIn(arg1, arg2) => write!(f, "apply_in_hyp {} {}", arg1, arg2),
         }
-        StrategyArg::Left => format!("prio: {} - goal: {} - left", prio, goalnum),
-        StrategyArg::Right => format!("prio: {} - goal: {} - right", prio, goalnum),
-        StrategyArg::HypLeft(arg1) => {
-            format!("prio: {} - goal: {} - hyp_left {}", prio, goalnum, arg1)
+    }
+}
+
+impl StrategyArg {
+    pub fn apply_to<'a>(&'a self, proof: &'a mut Proof) -> std::result::Result<(), &'a str> {
+        match self {
+            StrategyArg::Intro => proof.intro(),
+            StrategyArg::Split => proof.split(),
+            StrategyArg::HypSplit(arg1) => proof.hyp_split(*arg1),
+            StrategyArg::Left => proof.left(),
+            StrategyArg::Right => proof.right(),
+            StrategyArg::HypLeft(arg1) => proof.hyp_left(*arg1),
+            StrategyArg::HypRight(arg1) => proof.hyp_right(*arg1),
+            StrategyArg::FalseIsHyp => proof.false_is_hyp(),
+            StrategyArg::Exact(arg1) => proof.goal_is_exact_hyp(*arg1),
+            StrategyArg::Apply(arg1) => proof.apply(*arg1),
+            StrategyArg::ApplyIn(arg1, arg2) => proof.apply_in_hyp(*arg1, *arg2, true),
         }
-        StrategyArg::HypRight(arg1) => {
-            format!("prio: {} - goal: {} - hyp_right {}", prio, goalnum, arg1)
-        }
-        StrategyArg::FalseIsHyp => {
-            format!("prio: {} - goal: {} - false_is_hyp", prio, goalnum)
-        }
-        StrategyArg::Exact(arg1) => format!("prio: {} - goal: {} - exact {}", prio, goalnum, arg1),
-        StrategyArg::Apply(arg1) => format!("prio: {} - goal: {} - apply {}", prio, goalnum, arg1),
-        StrategyArg::ApplyIn(arg1, arg2) => format!(
-            "prio: {} - goal: {} - apply_in_hyp {} {}",
-            prio, goalnum, arg1, arg2
-        ),
     }
 }
 

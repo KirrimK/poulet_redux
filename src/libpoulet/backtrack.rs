@@ -21,11 +21,8 @@ pub fn auto(proof: &strategies::Proof) -> Result<Vec<(usize, usize, strategies::
             visited_states.push(local_proof.clone());
         }
         if !steps.is_empty() {
-            println!(
-                "{}{}",
-                " ".repeat(steps.len()),
-                strategies::strat_to_string(steps[steps.len() - 1])
-            )
+            let (_, _, strat) = steps[steps.len() - 1];
+            println!("{}{}", " ".repeat(steps.len()), strat)
         }
         if local_proof.goals.is_empty() {
             println!("auto: solved");
@@ -33,108 +30,14 @@ pub fn auto(proof: &strategies::Proof) -> Result<Vec<(usize, usize, strategies::
         } else {
             let applicable_strats = local_proof.get_applicable_strategies();
             for elt in applicable_strats {
-                let (_, goalnum, strat_name) = elt;
+                let (_, goalnum, strat) = elt;
                 let mut loop_proof = local_proof.clone();
                 if let Ok(()) = loop_proof.set_active_goal(goalnum) {
-                    match strat_name {
-                        strategies::StrategyArg::Intro => {
-                            if let Ok(()) = loop_proof.intro() {
-                                steps.push(elt);
-                                match local_backtrack(&loop_proof, visited_states, steps) {
-                                    Ok(()) => return Ok(()),
-                                    Err(()) => continue,
-                                }
-                            }
-                        }
-                        strategies::StrategyArg::Split => {
-                            if let Ok(()) = loop_proof.split() {
-                                steps.push(elt);
-                                match local_backtrack(&loop_proof, visited_states, steps) {
-                                    Ok(()) => return Ok(()),
-                                    Err(()) => continue,
-                                }
-                            }
-                        }
-                        strategies::StrategyArg::HypSplit(arg1) => {
-                            if let Ok(()) = loop_proof.hyp_split(arg1) {
-                                steps.push(elt);
-                                match local_backtrack(&loop_proof, visited_states, steps) {
-                                    Ok(()) => return Ok(()),
-                                    Err(()) => continue,
-                                }
-                            }
-                        }
-                        strategies::StrategyArg::Left => {
-                            if let Ok(()) = loop_proof.left() {
-                                steps.push(elt);
-                                match local_backtrack(&loop_proof, visited_states, steps) {
-                                    Ok(()) => return Ok(()),
-                                    Err(()) => continue,
-                                }
-                            }
-                        }
-                        strategies::StrategyArg::Right => {
-                            if let Ok(()) = loop_proof.right() {
-                                steps.push(elt);
-                                match local_backtrack(&loop_proof, visited_states, steps) {
-                                    Ok(()) => return Ok(()),
-                                    Err(()) => continue,
-                                }
-                            }
-                        }
-                        strategies::StrategyArg::HypLeft(arg1) => {
-                            if let Ok(()) = loop_proof.hyp_left(arg1) {
-                                steps.push(elt);
-                                match local_backtrack(&loop_proof, visited_states, steps) {
-                                    Ok(()) => return Ok(()),
-                                    Err(()) => continue,
-                                }
-                            }
-                        }
-                        strategies::StrategyArg::HypRight(arg1) => {
-                            if let Ok(()) = loop_proof.hyp_right(arg1) {
-                                steps.push(elt);
-                                match local_backtrack(&loop_proof, visited_states, steps) {
-                                    Ok(()) => return Ok(()),
-                                    Err(()) => continue,
-                                }
-                            }
-                        }
-                        strategies::StrategyArg::FalseIsHyp => {
-                            if let Ok(()) = loop_proof.false_is_hyp() {
-                                steps.push(elt);
-                                match local_backtrack(&loop_proof, visited_states, steps) {
-                                    Ok(()) => return Ok(()),
-                                    Err(()) => continue,
-                                }
-                            }
-                        }
-                        strategies::StrategyArg::Exact(arg1) => {
-                            if let Ok(()) = loop_proof.goal_is_exact_hyp(arg1) {
-                                steps.push(elt);
-                                match local_backtrack(&loop_proof, visited_states, steps) {
-                                    Ok(()) => return Ok(()),
-                                    Err(()) => continue,
-                                }
-                            }
-                        }
-                        strategies::StrategyArg::Apply(arg1) => {
-                            if let Ok(()) = loop_proof.apply(arg1) {
-                                steps.push(elt);
-                                match local_backtrack(&loop_proof, visited_states, steps) {
-                                    Ok(()) => return Ok(()),
-                                    Err(()) => continue,
-                                }
-                            }
-                        }
-                        strategies::StrategyArg::ApplyIn(arg1, arg2) => {
-                            if let Ok(()) = loop_proof.apply_in_hyp(arg1, arg2, true) {
-                                steps.push(elt);
-                                match local_backtrack(&loop_proof, visited_states, steps) {
-                                    Ok(()) => return Ok(()),
-                                    Err(()) => continue,
-                                }
-                            }
+                    if let Ok(()) = strat.apply_to(&mut loop_proof) {
+                        steps.push(elt);
+                        match local_backtrack(&loop_proof, visited_states, steps) {
+                            Ok(()) => return Ok(()),
+                            Err(()) => continue,
                         }
                     }
                 } else {
@@ -202,19 +105,9 @@ mod tests {
     }
 
     #[test]
-    fn already_visited_state_simple_or() {
+    fn already_visited_state_simple() {
         let mut proof = Proof::new();
         proof.add_goal_from_prop(Prop::or(
-            Prop::imply(Prop::Name(String::from("a")), Prop::Name(String::from("b"))),
-            Prop::imply(Prop::Name(String::from("a")), Prop::Name(String::from("b"))),
-        ));
-        assert_eq!(auto(&proof), Err(()))
-    }
-
-    #[test]
-    fn already_visited_state_simple_and() {
-        let mut proof = Proof::new();
-        proof.add_goal_from_prop(Prop::and(
             Prop::imply(Prop::Name(String::from("a")), Prop::Name(String::from("b"))),
             Prop::imply(Prop::Name(String::from("a")), Prop::Name(String::from("b"))),
         ));

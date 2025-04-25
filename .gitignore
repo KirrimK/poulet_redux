@@ -1,2 +1,4 @@
 /target
 lcov.info
+flamegraph.svg
+perf.data*

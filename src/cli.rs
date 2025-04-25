@@ -123,6 +123,18 @@ fn parse_input<'a>(
         Some((_, _)) => Err("Unknown command"),
         None => match input {
             "quit" => Ok(0),
+            "info" => {
+                if proof.goals.is_empty() {
+                    println!("No goals to display info about.")
+                } else {
+                    println!(
+                        "Active goal proposition has {} items and is of depth {}.",
+                        proof.goals[proof.active_goal_index()].0.items(),
+                        proof.goals[proof.active_goal_index()].0.depth()
+                    )
+                }
+                Ok(1)
+            }
             "purge" => {
                 *proof = strategies::Proof::new();
                 *prevs = vec![];
@@ -138,8 +150,8 @@ fn parse_input<'a>(
             "auto" => match backtrack::auto(proof) {
                 Ok(steps) => {
                     println!("Solved using auto:");
-                    for elt in steps {
-                        println!("    {}", strategies::strat_to_string(elt));
+                    for (_, goalnum, strat) in steps {
+                        println!("    goal: {} - {}", goalnum, strat);
                     }
                     *proof = strategies::Proof::new();
                     Ok(1)
@@ -207,8 +219,8 @@ pub fn repl() {
                 proof.active_goal_index() + 1
             );
             println!("Applicable Strategies: ");
-            for elt in proof.get_applicable_strategies() {
-                println!("    {}", strategies::strat_to_string(elt));
+            for (prio, goalnum, strat) in proof.get_applicable_strategies() {
+                println!("    prio: {} goal: {} - {}", prio, goalnum, strat);
             }
         }
 

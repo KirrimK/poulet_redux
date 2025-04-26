@@ -18,14 +18,12 @@ pub enum StrategyArg {
     Intro,
     Split,
     HypSplit(usize),
-    Left,
-    Right,
-    HypLeft(usize),
-    HypRight(usize),
+    OrSplit(bool),
+    HypOrSplit(usize, bool),
     FalseIsHyp,
     Exact(usize),
     Apply(usize),
-    ApplyIn(usize, usize),
+    ApplyIn(usize, usize, bool),
 }
 
 impl Proof {
@@ -129,200 +127,116 @@ impl Proof {
         self.active_goal = 0
     }
 
-    pub fn intro(&mut self) -> Result<(), &str> {
+    pub fn execute(&mut self, strat: &StrategyArg) -> Result<(), &str> {
         if self.goals.is_empty() {
-            return Err("No goal to test strategy");
+            return Err("No goal to execute strategy on.");
         }
-        match self.goals[self.active_goal].0.as_ref().clone() {
-            logic::Prop::Implies(a, b) => {
-                self.goals[self.active_goal].0 = b.clone();
-                self.goals[self.active_goal].1.push(a.clone());
-                Ok(())
-            }
-            _ => Err("Strategy could not be applied"),
-        }
-    }
-
-    pub fn split(&mut self) -> Result<(), &str> {
-        if self.goals.is_empty() {
-            return Err("No goal to test strategy");
-        }
-        match self.goals[self.active_goal].0.as_ref() {
-            logic::Prop::And(a, b) => {
-                let new_goal_a = (a.clone(), self.goals[self.active_goal].1.clone());
-                let new_goal_b = (b.clone(), self.goals[self.active_goal].1.clone());
-                self.goals[self.active_goal] = new_goal_a;
-                self.goals.push(new_goal_b);
-                Ok(())
-            }
-            _ => Err("Strategy could not be applied"),
-        }
-    }
-
-    pub fn hyp_split(&mut self, i: usize) -> Result<(), &str> {
-        if self.goals.is_empty() {
-            return Err("No goal to test strategy");
-        }
-        if i >= self.goals[self.active_goal].1.len() {
-            return Err("Out of bounds");
-        }
-        match self.goals[self.active_goal].1[i].as_ref().clone() {
-            logic::Prop::And(a, b) => {
-                self.goals[self.active_goal].1[i] = a.clone();
-                self.goals[self.active_goal].1.push(b.clone());
-                Ok(())
-            }
-            _ => Err("Strategy could not be applied"),
-        }
-    }
-
-    pub fn or_split(&mut self, left: bool) -> Result<(), &str> {
-        if self.goals.is_empty() {
-            return Err("No goal to test strategy");
-        }
-        match self.goals[self.active_goal].0.as_ref() {
-            logic::Prop::Or(a, b) => {
-                let new_goal = if left {
-                    (a.clone(), self.goals[self.active_goal].1.clone())
-                } else {
-                    (b.clone(), self.goals[self.active_goal].1.clone())
-                };
-
-                self.goals[self.active_goal] = new_goal;
-                Ok(())
-            }
-            _ => Err("Strategy could not be applied"),
-        }
-    }
-
-    pub fn left(&mut self) -> Result<(), &str> {
-        self.or_split(true)
-    }
-
-    pub fn right(&mut self) -> Result<(), &str> {
-        self.or_split(false)
-    }
-
-    pub fn hyp_or_split(&mut self, left: bool, i: usize) -> Result<(), &str> {
-        if self.goals.is_empty() {
-            return Err("No goal to test strategy");
-        }
-        if i >= self.goals[self.active_goal].1.len() {
-            return Err("Out of bounds");
-        }
-        match self.goals[self.active_goal].1[i].as_ref() {
-            logic::Prop::Or(a, b) => {
-                if left {
-                    self.goals[self.active_goal].1[i] = a.clone();
-                } else {
-                    self.goals[self.active_goal].1[i] = b.clone();
-                }
-                Ok(())
-            }
-            _ => Err("Strategy could not be applied"),
-        }
-    }
-
-    pub fn hyp_left(&mut self, i: usize) -> Result<(), &str> {
-        self.hyp_or_split(true, i)
-    }
-
-    pub fn hyp_right(&mut self, i: usize) -> Result<(), &str> {
-        self.hyp_or_split(false, i)
-    }
-
-    pub fn false_is_hyp(&mut self) -> Result<(), &str> {
-        if self.goals.is_empty() {
-            return Err("No goal to test strategy");
-        }
-        for hyp in self.goals[self.active_goal].1.iter() {
-            if *(*hyp) == logic::Prop::False {
-                self.goals[self.active_goal].0 = Rc::new(logic::Prop::True);
-                return Ok(());
-            }
-        }
-        Err("Strategy could not be applied")
-    }
-
-    pub fn goal_is_exact_hyp(&mut self, i: usize) -> Result<(), &str> {
-        if self.goals.is_empty() {
-            return Err("No goal to test strategy");
-        }
-        if i >= self.goals[self.active_goal].1.len() {
-            return Err("Out of bounds");
-        }
-        if self.goals[self.active_goal].1[i] == self.goals[self.active_goal].0 {
-            self.goals[self.active_goal].0 = Rc::new(logic::Prop::True);
-            Ok(())
-        } else {
-            Err("Strategy could not be applied")
-        }
-    }
-
-    pub fn assumption(&mut self) -> Result<(), &str> {
-        if self.goals.is_empty() {
-            return Err("No goal to test strategy");
-        }
-        let size = self.goals[self.active_goal].1.len();
-        for i in 0..size {
-            match self.goal_is_exact_hyp(i) {
-                Ok(()) => return Ok(()),
-                _ => continue,
-            }
-        }
-        Err("Strategy could not be applied")
-    }
-
-    pub fn apply(&mut self, i: usize) -> Result<(), &str> {
-        if self.goals.is_empty() {
-            return Err("No goal to test strategy");
-        }
-        if i >= self.goals[self.active_goal].1.len() {
-            return Err("Out of bounds");
-        }
-        match self.goals[self.active_goal].1[i].as_ref() {
-            logic::Prop::Implies(a, b) => {
-                if b.as_ref() == self.goals[self.active_goal].0.as_ref() {
-                    self.goals[self.active_goal].0 = a.clone();
+        match strat {
+            StrategyArg::Intro => {
+                if let logic::Prop::Implies(a, b) = self.goals[self.active_goal].0.as_ref().clone()
+                {
+                    self.goals[self.active_goal].0 = b.clone();
+                    self.goals[self.active_goal].1.push(a.clone());
                     return Ok(());
                 }
-                Err("Strategy could not be applied")
             }
-            _ => Err("Strategy could not be applied"),
-        }
-    }
-
-    pub fn apply_in_hyp(
-        &mut self,
-        i_target: usize,
-        i_applied: usize,
-        keep_old: bool,
-    ) -> Result<(), &str> {
-        if self.goals.is_empty() {
-            return Err("No goal to test strategy");
-        }
-        if i_target >= self.goals[self.active_goal].1.len() {
-            return Err("Out of bounds");
-        }
-        if i_applied >= self.goals[self.active_goal].1.len() {
-            return Err("Out of bounds");
-        }
-        match self.goals[self.active_goal].1[i_applied].as_ref().clone() {
-            logic::Prop::Implies(a, b) => {
-                let target_prop = &self.goals[self.active_goal].1[i_target];
-                if a.as_ref() == target_prop.as_ref() {
-                    if keep_old {
-                        self.goals[self.active_goal].1.push(b.clone());
-                    } else {
-                        self.goals[self.active_goal].1[i_target] = b.clone();
-                    }
-                    Ok(())
-                } else {
-                    Err("Strategy could not be applied")
+            StrategyArg::Split => {
+                if let logic::Prop::And(a, b) = self.goals[self.active_goal].0.as_ref() {
+                    let new_goal_a = (a.clone(), self.goals[self.active_goal].1.clone());
+                    let new_goal_b = (b.clone(), self.goals[self.active_goal].1.clone());
+                    self.goals[self.active_goal] = new_goal_a;
+                    self.goals.push(new_goal_b);
+                    return Ok(());
                 }
             }
-            _ => Err("Strategy could not be applied"),
-        }
+            StrategyArg::HypSplit(arg1) => {
+                if *arg1 >= self.goals[self.active_goal].1.len() {
+                    return Err("Out of bounds");
+                }
+                if let logic::Prop::And(a, b) =
+                    self.goals[self.active_goal].1[*arg1].as_ref().clone()
+                {
+                    self.goals[self.active_goal].1[*arg1] = a.clone();
+                    self.goals[self.active_goal].1.push(b.clone());
+                    return Ok(());
+                }
+            }
+            StrategyArg::OrSplit(left) => {
+                if let logic::Prop::Or(a, b) = self.goals[self.active_goal].0.as_ref() {
+                    let new_goal = if *left {
+                        (a.clone(), self.goals[self.active_goal].1.clone())
+                    } else {
+                        (b.clone(), self.goals[self.active_goal].1.clone())
+                    };
+
+                    self.goals[self.active_goal] = new_goal;
+                    return Ok(());
+                }
+            }
+            StrategyArg::HypOrSplit(arg1, left) => {
+                if *arg1 >= self.goals[self.active_goal].1.len() {
+                    return Err("Out of bounds");
+                }
+                if let logic::Prop::Or(a, b) = self.goals[self.active_goal].1[*arg1].as_ref() {
+                    if *left {
+                        self.goals[self.active_goal].1[*arg1] = a.clone();
+                    } else {
+                        self.goals[self.active_goal].1[*arg1] = b.clone();
+                    }
+                    return Ok(());
+                }
+            }
+            StrategyArg::FalseIsHyp => {
+                for hyp in self.goals[self.active_goal].1.iter() {
+                    if *(*hyp) == logic::Prop::False {
+                        self.goals[self.active_goal].0 = Rc::new(logic::Prop::True);
+                        return Ok(());
+                    }
+                }
+            }
+            StrategyArg::Exact(arg1) => {
+                if *arg1 >= self.goals[self.active_goal].1.len() {
+                    return Err("Out of bounds");
+                }
+                if self.goals[self.active_goal].1[*arg1] == self.goals[self.active_goal].0 {
+                    self.goals[self.active_goal].0 = Rc::new(logic::Prop::True);
+                    return Ok(());
+                }
+            }
+            StrategyArg::Apply(arg1) => {
+                if *arg1 >= self.goals[self.active_goal].1.len() {
+                    return Err("Out of bounds");
+                }
+                if let logic::Prop::Implies(a, b) = self.goals[self.active_goal].1[*arg1].as_ref() {
+                    if b.as_ref() == self.goals[self.active_goal].0.as_ref() {
+                        self.goals[self.active_goal].0 = a.clone();
+                        return Ok(());
+                    }
+                }
+            }
+            StrategyArg::ApplyIn(arg1, arg2, keep_old) => {
+                if *arg1 >= self.goals[self.active_goal].1.len() {
+                    return Err("Out of bounds");
+                }
+                if *arg2 >= self.goals[self.active_goal].1.len() {
+                    return Err("Out of bounds");
+                }
+                if let logic::Prop::Implies(a, b) =
+                    self.goals[self.active_goal].1[*arg2].as_ref().clone()
+                {
+                    let target_prop = &self.goals[self.active_goal].1[*arg1];
+                    if a.as_ref() == target_prop.as_ref() {
+                        if *keep_old {
+                            self.goals[self.active_goal].1.push(b.clone());
+                        } else {
+                            self.goals[self.active_goal].1[*arg1] = b.clone();
+                        }
+                        return Ok(());
+                    }
+                }
+            }
+        };
+        Err("Strategy could not be applied")
     }
 
     pub fn get_applicable_strategies(&self) -> Vec<(usize, usize, StrategyArg)> {
@@ -337,14 +251,14 @@ impl Proof {
                 logic::Prop::And(_, _) => result.push((3, index_goal, StrategyArg::Split)),
                 logic::Prop::Or(a, b) => {
                     if *a.as_ref() == logic::Prop::False {
-                        result.push((3, index_goal, StrategyArg::Right));
-                        result.push((4, index_goal, StrategyArg::Left));
+                        result.push((3, index_goal, StrategyArg::OrSplit(false)));
+                        result.push((4, index_goal, StrategyArg::OrSplit(true)));
                     } else if *b.as_ref() == logic::Prop::False {
-                        result.push((3, index_goal, StrategyArg::Left));
-                        result.push((4, index_goal, StrategyArg::Right));
+                        result.push((3, index_goal, StrategyArg::OrSplit(true)));
+                        result.push((4, index_goal, StrategyArg::OrSplit(false)));
                     } else {
-                        result.push((3, index_goal, StrategyArg::Left));
-                        result.push((3, index_goal, StrategyArg::Right));
+                        result.push((3, index_goal, StrategyArg::OrSplit(true)));
+                        result.push((3, index_goal, StrategyArg::OrSplit(false)));
                     }
                 }
             };
@@ -368,14 +282,14 @@ impl Proof {
                     }
                     logic::Prop::Or(a, b) => {
                         if *a.as_ref() == logic::Prop::False {
-                            result.push((2, index_goal, StrategyArg::HypLeft(index)));
-                            result.push((4, index_goal, StrategyArg::HypRight(index)));
+                            result.push((2, index_goal, StrategyArg::HypOrSplit(index, true)));
+                            result.push((4, index_goal, StrategyArg::HypOrSplit(index, false)));
                         } else if *b.as_ref() == logic::Prop::False {
-                            result.push((4, index_goal, StrategyArg::HypLeft(index)));
-                            result.push((2, index_goal, StrategyArg::HypRight(index)));
+                            result.push((4, index_goal, StrategyArg::HypOrSplit(index, true)));
+                            result.push((2, index_goal, StrategyArg::HypOrSplit(index, false)));
                         } else {
-                            result.push((4, index_goal, StrategyArg::HypLeft(index)));
-                            result.push((4, index_goal, StrategyArg::HypRight(index)));
+                            result.push((4, index_goal, StrategyArg::HypOrSplit(index, true)));
+                            result.push((4, index_goal, StrategyArg::HypOrSplit(index, false)));
                         }
                     }
                 };
@@ -386,7 +300,7 @@ impl Proof {
                     if i != index {
                         if let logic::Prop::Implies(a, _) = goal.1[i].as_ref() {
                             if a.as_ref() == hyp.as_ref() {
-                                result.push((4, index_goal, StrategyArg::ApplyIn(index, i)))
+                                result.push((4, index_goal, StrategyArg::ApplyIn(index, i, true)))
                             }
                         }
                     }
@@ -406,12 +320,12 @@ impl fmt::Display for StrategyArg {
             StrategyArg::HypSplit(arg1) => {
                 write!(f, "hyp_split {}", arg1)
             }
-            StrategyArg::Left => write!(f, "left"),
-            StrategyArg::Right => write!(f, "right"),
-            StrategyArg::HypLeft(arg1) => {
+            StrategyArg::OrSplit(true) => write!(f, "left"),
+            StrategyArg::OrSplit(false) => write!(f, "right"),
+            StrategyArg::HypOrSplit(arg1, true) => {
                 write!(f, "hyp_left {}", arg1)
             }
-            StrategyArg::HypRight(arg1) => {
+            StrategyArg::HypOrSplit(arg1, false) => {
                 write!(f, "hyp_right {}", arg1)
             }
             StrategyArg::FalseIsHyp => {
@@ -419,25 +333,7 @@ impl fmt::Display for StrategyArg {
             }
             StrategyArg::Exact(arg1) => write!(f, "exact {}", arg1),
             StrategyArg::Apply(arg1) => write!(f, "apply {}", arg1),
-            StrategyArg::ApplyIn(arg1, arg2) => write!(f, "apply_in_hyp {} {}", arg1, arg2),
-        }
-    }
-}
-
-impl StrategyArg {
-    pub fn apply_to<'a>(&'a self, proof: &'a mut Proof) -> std::result::Result<(), &'a str> {
-        match self {
-            StrategyArg::Intro => proof.intro(),
-            StrategyArg::Split => proof.split(),
-            StrategyArg::HypSplit(arg1) => proof.hyp_split(*arg1),
-            StrategyArg::Left => proof.left(),
-            StrategyArg::Right => proof.right(),
-            StrategyArg::HypLeft(arg1) => proof.hyp_left(*arg1),
-            StrategyArg::HypRight(arg1) => proof.hyp_right(*arg1),
-            StrategyArg::FalseIsHyp => proof.false_is_hyp(),
-            StrategyArg::Exact(arg1) => proof.goal_is_exact_hyp(*arg1),
-            StrategyArg::Apply(arg1) => proof.apply(*arg1),
-            StrategyArg::ApplyIn(arg1, arg2) => proof.apply_in_hyp(*arg1, *arg2, true),
+            StrategyArg::ApplyIn(arg1, arg2, _) => write!(f, "apply_in_hyp_keep {} {}", arg1, arg2),
         }
     }
 }
@@ -461,23 +357,9 @@ mod tests {
         assert_eq!(new_proof.active_goal_index(), 0);
         assert_eq!(new_proof.set_active_goal(0), Err("Out of bounds"));
         assert_eq!(new_proof.set_active_goal(1), Err("Out of bounds"));
-        assert_eq!(new_proof.intro(), Err("No goal to test strategy"));
-        assert_eq!(new_proof.split(), Err("No goal to test strategy"));
-        assert_eq!(new_proof.hyp_split(0), Err("No goal to test strategy"));
-        assert_eq!(new_proof.left(), Err("No goal to test strategy"));
-        assert_eq!(new_proof.right(), Err("No goal to test strategy"));
-        assert_eq!(new_proof.hyp_left(0), Err("No goal to test strategy"));
-        assert_eq!(new_proof.hyp_right(0), Err("No goal to test strategy"));
-        assert_eq!(new_proof.false_is_hyp(), Err("No goal to test strategy"));
         assert_eq!(
-            new_proof.goal_is_exact_hyp(0),
-            Err("No goal to test strategy")
-        );
-        assert_eq!(new_proof.assumption(), Err("No goal to test strategy"));
-        assert_eq!(new_proof.apply(0), Err("No goal to test strategy"));
-        assert_eq!(
-            new_proof.apply_in_hyp(0, 0, false),
-            Err("No goal to test strategy")
+            new_proof.execute(&StrategyArg::Intro),
+            Err("No goal to execute strategy on.")
         );
     }
 
@@ -619,18 +501,33 @@ mod tests {
             active_goal: 0,
         };
 
-        assert_eq!(proof_before.intro(), Ok(()));
+        assert_eq!(proof_before.execute(&StrategyArg::Intro), Ok(()));
         assert_eq!(proof_before, proof_after);
         let _ = proof_before.set_active_goal(1);
-        assert_eq!(proof_before.intro(), Err("Strategy could not be applied"));
+        assert_eq!(
+            proof_before.execute(&StrategyArg::Intro),
+            Err("Strategy could not be applied")
+        );
         let _ = proof_before.set_active_goal(2);
-        assert_eq!(proof_before.intro(), Err("Strategy could not be applied"));
+        assert_eq!(
+            proof_before.execute(&StrategyArg::Intro),
+            Err("Strategy could not be applied")
+        );
         let _ = proof_before.set_active_goal(3);
-        assert_eq!(proof_before.intro(), Err("Strategy could not be applied"));
+        assert_eq!(
+            proof_before.execute(&StrategyArg::Intro),
+            Err("Strategy could not be applied")
+        );
         let _ = proof_before.set_active_goal(4);
-        assert_eq!(proof_before.intro(), Err("Strategy could not be applied"));
+        assert_eq!(
+            proof_before.execute(&StrategyArg::Intro),
+            Err("Strategy could not be applied")
+        );
         let _ = proof_before.set_active_goal(5);
-        assert_eq!(proof_before.intro(), Err("Strategy could not be applied"));
+        assert_eq!(
+            proof_before.execute(&StrategyArg::Intro),
+            Err("Strategy could not be applied")
+        );
     }
 
     #[test]
@@ -690,21 +587,42 @@ mod tests {
             active_goal: 0,
         };
 
-        assert_eq!(proof_before.split(), Ok(()));
+        assert_eq!(proof_before.execute(&StrategyArg::Split), Ok(()));
         assert_eq!(proof_before, proof_after);
-        assert_eq!(proof_before.split(), Err("Strategy could not be applied"));
+        assert_eq!(
+            proof_before.execute(&StrategyArg::Split),
+            Err("Strategy could not be applied")
+        );
         let _ = proof_before.set_active_goal(1);
-        assert_eq!(proof_before.split(), Err("Strategy could not be applied"));
+        assert_eq!(
+            proof_before.execute(&StrategyArg::Split),
+            Err("Strategy could not be applied")
+        );
         let _ = proof_before.set_active_goal(2);
-        assert_eq!(proof_before.split(), Err("Strategy could not be applied"));
+        assert_eq!(
+            proof_before.execute(&StrategyArg::Split),
+            Err("Strategy could not be applied")
+        );
         let _ = proof_before.set_active_goal(3);
-        assert_eq!(proof_before.split(), Err("Strategy could not be applied"));
+        assert_eq!(
+            proof_before.execute(&StrategyArg::Split),
+            Err("Strategy could not be applied")
+        );
         let _ = proof_before.set_active_goal(4);
-        assert_eq!(proof_before.split(), Err("Strategy could not be applied"));
+        assert_eq!(
+            proof_before.execute(&StrategyArg::Split),
+            Err("Strategy could not be applied")
+        );
         let _ = proof_before.set_active_goal(5);
-        assert_eq!(proof_before.split(), Err("Strategy could not be applied"));
+        assert_eq!(
+            proof_before.execute(&StrategyArg::Split),
+            Err("Strategy could not be applied")
+        );
         let _ = proof_before.set_active_goal(6);
-        assert_eq!(proof_before.split(), Err("Strategy could not be applied"));
+        assert_eq!(
+            proof_before.execute(&StrategyArg::Split),
+            Err("Strategy could not be applied")
+        );
     }
 
     #[test]
@@ -755,33 +673,36 @@ mod tests {
             active_goal: 0,
         };
 
-        assert_eq!(proof_before.hyp_split(0), Ok(()));
+        assert_eq!(proof_before.execute(&StrategyArg::HypSplit(0)), Ok(()));
         assert_eq!(proof_before, proof_after);
         assert_eq!(
-            proof_before.hyp_split(1),
+            proof_before.execute(&StrategyArg::HypSplit(1)),
             Err("Strategy could not be applied")
         );
         assert_eq!(
-            proof_before.hyp_split(2),
+            proof_before.execute(&StrategyArg::HypSplit(2)),
             Err("Strategy could not be applied")
         );
         assert_eq!(
-            proof_before.hyp_split(3),
+            proof_before.execute(&StrategyArg::HypSplit(3)),
             Err("Strategy could not be applied")
         );
         assert_eq!(
-            proof_before.hyp_split(4),
+            proof_before.execute(&StrategyArg::HypSplit(4)),
             Err("Strategy could not be applied")
         );
         assert_eq!(
-            proof_before.hyp_split(5),
+            proof_before.execute(&StrategyArg::HypSplit(5)),
             Err("Strategy could not be applied")
         );
         assert_eq!(
-            proof_before.hyp_split(6),
+            proof_before.execute(&StrategyArg::HypSplit(6)),
             Err("Strategy could not be applied")
         );
-        assert_eq!(proof_before.hyp_split(8), Err("Out of bounds"))
+        assert_eq!(
+            proof_before.execute(&StrategyArg::HypSplit(8)),
+            Err("Out of bounds")
+        )
     }
 
     #[test]
@@ -866,43 +787,49 @@ mod tests {
             active_goal: 0,
         };
 
-        assert_eq!(proof_before_left.left(), Ok(()));
+        assert_eq!(
+            proof_before_left.execute(&StrategyArg::OrSplit(true)),
+            Ok(())
+        );
         assert_eq!(proof_before_left, proof_after_left);
-        assert_eq!(proof_before_right.right(), Ok(()));
+        assert_eq!(
+            proof_before_right.execute(&StrategyArg::OrSplit(false)),
+            Ok(())
+        );
         assert_eq!(proof_before_right, proof_after_right);
 
         assert_eq!(
-            proof_before_left.left(),
+            proof_before_left.execute(&StrategyArg::OrSplit(true)),
             Err("Strategy could not be applied")
         );
         let _ = proof_before_left.set_active_goal(1);
         assert_eq!(
-            proof_before_left.left(),
+            proof_before_left.execute(&StrategyArg::OrSplit(true)),
             Err("Strategy could not be applied")
         );
         let _ = proof_before_left.set_active_goal(2);
         assert_eq!(
-            proof_before_left.left(),
+            proof_before_left.execute(&StrategyArg::OrSplit(true)),
             Err("Strategy could not be applied")
         );
         let _ = proof_before_left.set_active_goal(3);
         assert_eq!(
-            proof_before_left.left(),
+            proof_before_left.execute(&StrategyArg::OrSplit(true)),
             Err("Strategy could not be applied")
         );
         let _ = proof_before_left.set_active_goal(4);
         assert_eq!(
-            proof_before_left.left(),
+            proof_before_left.execute(&StrategyArg::OrSplit(true)),
             Err("Strategy could not be applied")
         );
         let _ = proof_before_left.set_active_goal(5);
         assert_eq!(
-            proof_before_left.left(),
+            proof_before_left.execute(&StrategyArg::OrSplit(true)),
             Err("Strategy could not be applied")
         );
         let _ = proof_before_left.set_active_goal(6);
         assert_eq!(
-            proof_before_left.left(),
+            proof_before_left.execute(&StrategyArg::OrSplit(true)),
             Err("Strategy could not be applied")
         );
     }
@@ -972,7 +899,10 @@ mod tests {
         };
         assert_eq!(
             left_right_no_false.get_applicable_strategies(),
-            vec![(3, 0, StrategyArg::Left), (3, 0, StrategyArg::Right)]
+            vec![
+                (3, 0, StrategyArg::OrSplit(false)),
+                (3, 0, StrategyArg::OrSplit(true))
+            ]
         );
 
         let left_right_false = Proof {
@@ -984,7 +914,10 @@ mod tests {
         };
         assert_eq!(
             left_right_false.get_applicable_strategies(),
-            vec![(3, 0, StrategyArg::Left), (4, 0, StrategyArg::Right)]
+            vec![
+                (3, 0, StrategyArg::OrSplit(true)),
+                (4, 0, StrategyArg::OrSplit(false))
+            ]
         );
 
         let left_false_right = Proof {
@@ -996,7 +929,10 @@ mod tests {
         };
         assert_eq!(
             left_false_right.get_applicable_strategies(),
-            vec![(3, 0, StrategyArg::Right), (4, 0, StrategyArg::Left)]
+            vec![
+                (3, 0, StrategyArg::OrSplit(false)),
+                (4, 0, StrategyArg::OrSplit(true))
+            ]
         );
     }
 }

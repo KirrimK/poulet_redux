@@ -44,35 +44,39 @@ fn parse_input<'a>(
             Err(_) => Err("Invalid argument"),
         },
         Some(("hyp_split", rest)) => match rest.trim().parse::<usize>() {
-            Ok(goal_num) => match proof.hyp_split(goal_num) {
+            Ok(goal_num) => match proof.execute(&strategies::StrategyArg::HypSplit(goal_num)) {
                 Ok(()) => Ok(1),
                 Err(msg) => Err(msg),
             },
             Err(_) => Err("Invalid argument"),
         },
         Some(("hyp_left", rest)) => match rest.trim().parse::<usize>() {
-            Ok(goal_num) => match proof.hyp_left(goal_num) {
-                Ok(()) => Ok(1),
-                Err(msg) => Err(msg),
-            },
+            Ok(goal_num) => {
+                match proof.execute(&strategies::StrategyArg::HypOrSplit(goal_num, true)) {
+                    Ok(()) => Ok(1),
+                    Err(msg) => Err(msg),
+                }
+            }
             Err(_) => Err("Invalid argument"),
         },
         Some(("hyp_right", rest)) => match rest.trim().parse::<usize>() {
-            Ok(goal_num) => match proof.hyp_right(goal_num) {
-                Ok(()) => Ok(1),
-                Err(msg) => Err(msg),
-            },
+            Ok(goal_num) => {
+                match proof.execute(&strategies::StrategyArg::HypOrSplit(goal_num, false)) {
+                    Ok(()) => Ok(1),
+                    Err(msg) => Err(msg),
+                }
+            }
             Err(_) => Err("Invalid argument"),
         },
         Some(("exact", rest)) => match rest.trim().parse::<usize>() {
-            Ok(goal_num) => match proof.goal_is_exact_hyp(goal_num) {
+            Ok(goal_num) => match proof.execute(&strategies::StrategyArg::Exact(goal_num)) {
                 Ok(()) => Ok(1),
                 Err(msg) => Err(msg),
             },
             Err(_) => Err("Invalid argument"),
         },
         Some(("apply", rest)) => match rest.trim().parse::<usize>() {
-            Ok(goal_num) => match proof.apply(goal_num) {
+            Ok(goal_num) => match proof.execute(&strategies::StrategyArg::Apply(goal_num)) {
                 Ok(()) => Ok(1),
                 Err(msg) => Err(msg),
             },
@@ -85,7 +89,9 @@ fn parse_input<'a>(
                     second.trim().parse::<usize>(),
                 ) {
                     (Ok(first_num), Ok(second_num)) => {
-                        match proof.apply_in_hyp(first_num, second_num, false) {
+                        match proof.execute(&strategies::StrategyArg::ApplyIn(
+                            first_num, second_num, false,
+                        )) {
                             Ok(()) => Ok(1),
                             Err(msg) => Err(msg),
                         }
@@ -106,7 +112,9 @@ fn parse_input<'a>(
                     second.trim().parse::<usize>(),
                 ) {
                     (Ok(first_num), Ok(second_num)) => {
-                        match proof.apply_in_hyp(first_num, second_num, true) {
+                        match proof.execute(&strategies::StrategyArg::ApplyIn(
+                            first_num, second_num, true,
+                        )) {
                             Ok(()) => Ok(1),
                             Err(msg) => Err(msg),
                         }
@@ -158,7 +166,7 @@ fn parse_input<'a>(
                 }
                 Err(()) => Err("Could not solve using auto"),
             },
-            "intro" => match proof.intro() {
+            "intro" => match proof.execute(&strategies::StrategyArg::Intro) {
                 Ok(()) => Ok(1),
                 Err(msg) => Err(msg),
             },
@@ -166,23 +174,19 @@ fn parse_input<'a>(
                 proof.clean();
                 Ok(1)
             }
-            "split" => match proof.split() {
+            "split" => match proof.execute(&strategies::StrategyArg::Split) {
                 Ok(()) => Ok(1),
                 Err(msg) => Err(msg),
             },
-            "left" => match proof.left() {
+            "left" => match proof.execute(&strategies::StrategyArg::OrSplit(true)) {
                 Ok(()) => Ok(1),
                 Err(msg) => Err(msg),
             },
-            "right" => match proof.right() {
+            "right" => match proof.execute(&strategies::StrategyArg::OrSplit(false)) {
                 Ok(()) => Ok(1),
                 Err(msg) => Err(msg),
             },
-            "false" => match proof.false_is_hyp() {
-                Ok(()) => Ok(1),
-                Err(msg) => Err(msg),
-            },
-            "assumption" => match proof.assumption() {
+            "false" => match proof.execute(&strategies::StrategyArg::FalseIsHyp) {
                 Ok(()) => Ok(1),
                 Err(msg) => Err(msg),
             },

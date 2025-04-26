@@ -33,7 +33,7 @@ pub fn auto(proof: &strategies::Proof) -> Result<Vec<(usize, usize, strategies::
                 let (_, goalnum, strat) = elt;
                 let mut loop_proof = local_proof.clone();
                 if let Ok(()) = loop_proof.set_active_goal(goalnum) {
-                    if let Ok(()) = strat.apply_to(&mut loop_proof) {
+                    if let Ok(()) = loop_proof.execute(&strat) {
                         steps.push(elt);
                         match local_backtrack(&loop_proof, visited_states, steps) {
                             Ok(()) => return Ok(()),
